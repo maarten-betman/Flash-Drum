@@ -17,7 +17,7 @@ if __name__ == '__main__':
     flash = FlashDrum()
     C1 = 'Benzene'
     C2 = 'Toluene'
-    z = {C1: 0.5, C2: 0.5}
+    z = {C1: 0.0, C2: 1.0}
     pB = {'A':6.89272, 'B':1203.531, 'C':219.888}
     pT = {'A':6.95805, 'B':1346.773, 'C':219.693}
     f = {'Antoine': Antoine, 'AntoineInv' : AntoineInv}
@@ -29,6 +29,8 @@ if __name__ == '__main__':
     flash.setFeedStream(feedStream)
     flash.getFeedStream()
 
-    T = flash.dewT(101.325, f, fp)
-    print("{:.2f}".format(T-273.15))  
+    #T = flash.dewT(101.325, f, fp)
+    #print("{:.2f}".format(T-273.15))  
+    P = flash.dewP(110.62+273.15,f,fp)
+    print(P)
  

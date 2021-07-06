@@ -12,7 +12,20 @@ class FlashDrum():
         self.heat = 0.0
         self.pressure = 1.0
 
+    def normalize(self, z):
+        Z = sum([zi for zi in z.values()])
+
+        if not ((Z == 1.0) or (Z == 1)):
+
+            for key in z.keys():
+
+                z[key] = z[key] / Z
+
+        return z
+
+
     def setFeedStream(self, inputF):
+        inputF['composition'] = self.normalize(inputF['composition'])
         self.feed = inputF
 
     def getFeedStream(self):
@@ -110,6 +123,20 @@ class FlashDrum():
         m.solve(disp=False) 
 
         return round(T.value[0], 2)
+
+    def bubbleP(self, T, f, fp = {}):
+
+        P = sum([self.feed['composition'][key] * f['Antoine'](T, **fp['Antoine'][key]) for key in self.feed['composition'].keys()])
+
+        return round(P, 3)
+
+    def dewP(self, T, f, fp = {}):
+
+        P = sum([self.feed['composition'][key] / f['Antoine'](T, **fp['Antoine'][key]) for key in self.feed['composition'].keys()]) ** (-1)
+
+        return round(P, 3)
+
+
 
 
       
