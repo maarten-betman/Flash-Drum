@@ -9,8 +9,9 @@ class FlashDrum():
         self.gas = {'molar flow': None, 'composition': None, 'enthanply': None, 'temperature': None, 'pressure': None}
         self.liquid = {'molar flow': None, 'composition': None, 'enthanply': None, 'temperature': None, 'pressure': None}
         self.mode = 'Isothermal'
-        self.heat = 0.0
-        self.pressure = 1.0
+        self.heat = None
+        self.pressure = None
+        self.Tref = 298.15
 
     def normalize(self, z):
         Z = sum([zi for zi in z.values()])
@@ -54,29 +55,65 @@ class FlashDrum():
         return Psat / P
 
 
-    def isothermal(self, T, P, f, fp = {}):
+    def isothermal(self, T, P, f, fp = {}, energy = False):
         self.gas['temperature'] = T
         self.gas['pressure'] = P
         self.liquid['temperature'] = T
+        self.liquid['pressure'] = P
 
 
         # K's 
         Ki = {}
-        for key in self.feed['composition'].value.keys():
+        Tsat = {}
+        for key in self.feed['composition'].keys():
 
-            Ki[key] = self.idealK(T.value,P.value, f['Antoine'], fp[key])
+            Ki[key] = self.idealK(T,P, f['Antoine'], fp['Antoine'][key])
+            Tsat[key] = f['AntoineInv'](P,**fp['AntoineInv'][key])
 
         m = GEKKO()
         Psi = m.Var(value=0.5, lb= 0.0, ub = 1.0)
-        x = sum([((self.feed['composition'].value[key] * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
+        x = sum([((self.feed['composition'][key] * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
         m.Equation([x == 0])
         m.solve(disp=False)  
-        self.gas['molar flow'] = MolarFlow(Psi.value[0] * self.feed['molar flow'].value, self.feed['molar flow'].units)
-        self.feed['molar flow'] = MolarFlow(self.feed['molar flow'].value - self.gas['molar flow'].value, self.gas['molar flow'].units)
+        self.gas['molar flow'] = Psi.value[0] * self.feed['molar flow']
+        self.feed['molar flow'] = self.feed['molar flow'] - self.gas['molar flow']
 
         for key in self.Ki.keys():
-            self.liquid['composition'].value['key'] = (self.feed['composition'].value[key]) / (1 + Psi.value[0] * (Ki[key] - 1))
-            self.gas['composition'].value['key'] = self.liquid['composition'].value['key']  * Ki[key]
+            self.liquid['composition'][key] = (self.feed['composition'][key]) / (1 + Psi.value[0] * (Ki[key] - 1))
+            self.gas['composition'][key] = self.liquid['composition'][key]  * Ki[key]
+
+        if energy:
+
+            #Energy Balance
+            Tf = self.feed['temperature']
+            Tref = self.Tref
+            T_bubble = self.bubbleT(P, f, fp)
+            T_dew = self.dewT(P, f, fp)
+            cpl = {}
+            cpig = {}
+            hf = {}
+            hg = {}
+            hl = {}
+            
+            for key in self.feed['composition'].keys():
+
+                cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
+                cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
+                if self.feed['temperature'] < T_dew:
+                    hf[key] = self.feed['composition'][key] * cpl[key] * (Tf - Tref)
+                    hl[key] = self.liquid['composition'][key] * cpl[key] * (T - Tref)
+                    hg[key] = self.gas['composition'][key] * (cpig[key] * (T - Tref) + f['Hvap'](T, **fp['Hvap'][key]))
+
+            self.feed['enthalpy'] = round( sum([value for value in hf.values()]), 2)
+            self.liquid['enthalpy'] = round( sum([value for value in hl.values()]), 2)
+            self.gas['enthalpy'] = round( sum([value for value in hg.values()]), 2)
+
+            self.heat = self.gas['molar flow'] * self.gas['enthalpy'] + self.liquid['molar flow'] * self.liquid['enthalpy'] - self.feed['molar flow'] * self.feed['enthalpy']
+
+        
+        
+        
+
 
     def bubbleT(self, P, f, fp = {}):
 
