@@ -5,9 +5,9 @@ class FlashDrum():
         # A flas drum has one inlet stream and two outlet stream. This is how they are built.
         # They a dictionary type, {'molar flow': F, 'composition': z, 'enthanply': h, 'temperature': T, 'pressure': P}
         # This class only works with pressure in kPa and temperature in K.
-        self.feed = {'molar flow': None, 'composition': None, 'enthanply': None, 'temperature': None, 'pressure': None}
-        self.gas = {'molar flow': None, 'composition': None, 'enthanply': None, 'temperature': None, 'pressure': None}
-        self.liquid = {'molar flow': None, 'composition': None, 'enthanply': None, 'temperature': None, 'pressure': None}
+        self.feed = {'molar flow': None, 'composition': {}, 'enthanply': None, 'temperature': None, 'pressure': None}
+        self.vapor = {'molar flow': None, 'composition': {}, 'enthanply': None, 'temperature': None, 'pressure': None}
+        self.liquid = {'molar flow': None, 'composition': {}, 'enthanply': None, 'temperature': None, 'pressure': None}
         self.mode = 'Isothermal'
         self.heat = None
         self.pressure = None
@@ -29,26 +29,35 @@ class FlashDrum():
         inputF['composition'] = self.normalize(inputF['composition'])
         self.feed = inputF
 
-    def getFeedStream(self):
-        for key,val in self.feed.items():
-            if val != None:
-                print(str(key) + ': ' + str(val))
+    def Streams(self):
 
-    def setGasStream(self, outputG):
-        self.gas = outputG
+        print("-"*90)
+        print("\t\t\t\tF L A S H  D R U M")
+        print("-"*90)
+        print("Streams:\t\t" + "FEED" + " " * 20 + "VAPOR " + " " * 20 + "LIQUID")
+        print("-"*90)
+        print("\t\t\t" + "T_f = " + str(self.feed['temperature']) + " K" + 
+              "\t\t" + "T_v = " + str(self.vapor['temperature']) + " K" + 
+              "\t\t  " + "T_l = " + str(self.liquid['temperature']) + " K")
+        print("\t\t\t" + "P_f = " + str(self.feed['pressure']) + " kPa" + 
+              "\t\t" + "P_v = " + str(self.vapor['pressure']) + " kPa" + 
+              "\t\t  " + "P_l = " + str(self.liquid['pressure']) + " kPa")
+        print("\t\t\t" + "F = " + str(self.feed['molar flow']) + " mol/h" + 
+              "\t\t" + "V = " + str(self.vapor['molar flow']) + " mol/h" + 
+              "\t  " + "L = " + str(self.liquid['molar flow']) + " mol/h")
+        for key in self.feed['composition'].keys():
+            print(key + "\t\t\tz = " + str(round(self.feed['composition'][key], 4)) + 
+              "\t\t\t" + "y = " + str(round(self.vapor['composition'][key], 4)) + 
+              "\t\t  " + "x = " + str(round(self.liquid['composition'][key],4)))
+            
+        print("\t\t\t" + "h_f = " + str(self.feed['enthalpy']) + " kJ/mol" + 
+              "\t" + "h_v = " + str(self.vapor['enthalpy']) + " kJ/mol" + 
+              "\t  " + "h_l = " + str(self.liquid['enthalpy']) + " kJ/mol")
+        print("-"*90)
+        print("\t\t\tHEAT: Q = " + str(round(self.heat)) + " kJ/mol")
+        print("-"*90)
 
-    def getGasStream(self):
-        for key,val in self.gas.items():
-            if val != None:
-                print(str(key) + ': ' + str(val) )
 
-    def setLiquidStream(self, outputL):
-        self.liquid = outputL
-
-    def getLiquidsStream(self):
-        for key,val in self.liquid.items():
-            if val != None:
-                print(str(key) + ': ' + str(val) )
 
     def idealK(self, T, P, f, fp = {}):
         Psat = f(T, **fp)
@@ -56,8 +65,8 @@ class FlashDrum():
 
 
     def isothermal(self, T, P, f, fp = {}, energy = False):
-        self.gas['temperature'] = T
-        self.gas['pressure'] = P
+        self.vapor['temperature'] = T
+        self.vapor['pressure'] = P
         self.liquid['temperature'] = T
         self.liquid['pressure'] = P
 
@@ -75,12 +84,12 @@ class FlashDrum():
         x = sum([((self.feed['composition'][key] * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
         m.Equation([x == 0])
         m.solve(disp=False)  
-        self.gas['molar flow'] = Psi.value[0] * self.feed['molar flow']
-        self.feed['molar flow'] = self.feed['molar flow'] - self.gas['molar flow']
+        self.vapor['molar flow'] = round(Psi.value[0] * self.feed['molar flow'], 3)
+        self.liquid['molar flow'] = round(self.feed['molar flow'] - self.vapor['molar flow'], 3)
 
-        for key in self.Ki.keys():
+        for key in Ki.keys():
             self.liquid['composition'][key] = (self.feed['composition'][key]) / (1 + Psi.value[0] * (Ki[key] - 1))
-            self.gas['composition'][key] = self.liquid['composition'][key]  * Ki[key]
+            self.vapor['composition'][key] = self.liquid['composition'][key]  * Ki[key]
 
         if energy:
 
@@ -102,13 +111,14 @@ class FlashDrum():
                 if self.feed['temperature'] < T_dew:
                     hf[key] = self.feed['composition'][key] * cpl[key] * (Tf - Tref)
                     hl[key] = self.liquid['composition'][key] * cpl[key] * (T - Tref)
-                    hg[key] = self.gas['composition'][key] * (cpig[key] * (T - Tref) + f['Hvap'](T, **fp['Hvap'][key]))
+                    hg[key] = self.vapor['composition'][key] * (cpig[key] * (T - Tref) + f['Hvap'](T, **fp['Hvap'][key]))
 
             self.feed['enthalpy'] = round( sum([value for value in hf.values()]), 2)
             self.liquid['enthalpy'] = round( sum([value for value in hl.values()]), 2)
-            self.gas['enthalpy'] = round( sum([value for value in hg.values()]), 2)
+            self.vapor['enthalpy'] = round( sum([value for value in hg.values()]), 2)
 
-            self.heat = self.gas['molar flow'] * self.gas['enthalpy'] + self.liquid['molar flow'] * self.liquid['enthalpy'] - self.feed['molar flow'] * self.feed['enthalpy']
+
+            self.heat = self.vapor['molar flow'] * self.vapor['enthalpy'] + self.liquid['molar flow'] * self.liquid['enthalpy'] - self.feed['molar flow'] * self.feed['enthalpy']
 
         
         
