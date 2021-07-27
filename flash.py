@@ -1,4 +1,5 @@
 from gekko import GEKKO
+from stream import Stream
 
 class FlashDrum():
     def __init__(self):
@@ -158,7 +159,7 @@ class FlashDrum():
         t = round(t / len(self.feed['composition']))
 
 
-        T = m.Var(value = t, lb = 0.0, ub = 2000.0)
+        T = m.Var(value = t, lb = 200.0, ub = 800.0)
         # K's 
         Ki = {}
 
