@@ -2,6 +2,7 @@ from flash import FlashDrum
 import numpy as np
 from math import sinh, cosh
 from scipy.integrate import quad
+from stream import Stream
 
 def Antoine(T, A, B, C):
 
@@ -57,21 +58,12 @@ if __name__ == '__main__':
 
     Tf = 363.15
     Pf = 400
-    feedStream = {'molar flow': 100,
-                'composition': z,
-                'temperature': Tf,
-                'pressure': Pf}
+    feedStream = Stream('Feed', Tf, Pf, 100, z)
 
     flash.setFeedStream(feedStream)
     #flash.getFeedStream()
     T = 393.15
     P = 200
-    #T = flash.dewT(101.325, f, fp)
-    #print("{:.2f}".format(T-273.15))  
-    Tb = flash.bubbleT(P,f,fp)
-    Td = flash.dewT(P, f, fp)
-    #print(round(Tb-273.15,2))
-    #print(round(Td-273.15,2))
 
     flash.isothermal(T,P,f,fp, True)
     flash.Streams()
