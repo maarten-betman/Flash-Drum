@@ -3,9 +3,16 @@ from stream import Stream
 
 class FlashDrum():
     def __init__(self, mode = 'Isothermal'):
-        # A flas drum has one inlet stream and two outlet stream. This is how they are built.
-        # They a dictionary type, {'molar flow': F, 'composition': z, 'enthanply': h, 'temperature': T, 'pressure': P}
-        # This class only works with pressure in kPa and temperature in K.
+        ''' The Flash Drum has one inlet stream and two outlet stream.
+         The program uses the class Stream to represent the inlet and outlet process streams.
+         -> feed is the inlet object from the class Stream.
+         -> vapor is an outlet object from the class Stream.
+         -> liquid is an outlet object from the class Stream.
+         -> mode refers to calculations made by the program, default is "Isothermal".
+         -> heat is the heat in kJ/mol that the Flash Drum requires.
+         -> pressure is the Flash Drum operating pressure.
+         -> Tref is the reference temperature in K for the energy balance calculations. 
+         This class only works with pressure in kPa and temperature in K. '''
         self.feed = Stream("FEED")
         self.vapor = Stream("VAPOR")
         self.liquid = Stream("LIQUID")

@@ -7,7 +7,6 @@ class Stream():
         self.Pressure = Pressure
         self.molarFlow = molarFlow
         self.mComposition = mComposition
-        #self.mComposition = {}
         self.Enthalpy = Enthalpy
 
     def setT(self, T):
