@@ -55,19 +55,21 @@ class FlashDrum():
 
 
 
-    def idealK(self, T, P, f, fp = {}):
+    def idealK(self, T, P, f, fp):
         Psat = f(T, **fp)
         return Psat / P
 
 
-    def isothermal(self, T, P, f, fp = {}, energy = False):
+    def isothermal(self, T, P, f, fp, energy = False):
         self.vapor.setT(T)
         self.vapor.setP(P)
         self.liquid.setT(T)
         self.liquid.setP(P)
-        for key in self.feed.getmC().keys():
-            self.vapor.setmC(0, key)
-            self.liquid.setmC(0, key)
+
+
+        self.vapor.setmC(None)
+        self.liquid.setmC(None)
+
 
 
         # K's 
@@ -87,12 +89,8 @@ class FlashDrum():
         self.liquid.setmF(round(self.feed.getmF() - self.vapor.getmF(), 3))
 
         for key in Ki.keys():
-            x = float((self.feed.getmC(key)) / (1 + Psi.value[0] * (Ki[key] - 1)))
-            self.liquid.mComposition[key] = x
-        
-        for key in Ki.keys():
-            y = float(self.liquid.getmC(key)  * Ki[key])
-            self.vapor.setmC(y, key)
+            self.liquid.setmC((self.feed.getmC(key)) / (1 + Psi.value[0] * (Ki[key] - 1)), key)
+            self.vapor.setmC(self.liquid.getmC(key)  * Ki[key], key)
 
             
         if energy:
@@ -129,7 +127,7 @@ class FlashDrum():
         
 
 
-    def bubbleT(self, P, f, fp = {}):
+    def bubbleT(self, P, f, fp):
 
         m = GEKKO()
         t = 0
@@ -151,7 +149,7 @@ class FlashDrum():
 
         return round(T.value[0], 2)
 
-    def dewT(self, P, f, fp = {}):
+    def dewT(self, P, f, fp ):
 
         m = GEKKO()
         t = 0
@@ -175,13 +173,13 @@ class FlashDrum():
 
         return round(T.value[0], 2)
 
-    def bubbleP(self, T, f, fp = {}):
+    def bubbleP(self, T, f, fp):
 
         P = sum([self.feed.getmC(key) * f['Antoine'](T, **fp['Antoine'][key]) for key in self.feed.getmC().keys()])
 
         return round(P, 3)
 
-    def dewP(self, T, f, fp = {}):
+    def dewP(self, T, f, fp):
 
         P = sum([self.feed.getmC(key) / f['Antoine'](T, **fp['Antoine'][key]) for key in self.feed.getmC().keys()]) ** (-1)
 

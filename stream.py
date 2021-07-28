@@ -1,12 +1,13 @@
 
 class Stream():
 
-    def __init__(self, name = "stream_000", Temperature = None,  Pressure = None, molarFlow = 0.0, mComposition = {}, Enthalpy = None):
+    def __init__(self, name = "stream_000", Temperature = None,  Pressure = None, molarFlow = 0.0, mComposition = None, Enthalpy = None):
         self.name =  name
         self.Temperature = Temperature
         self.Pressure = Pressure
         self.molarFlow = molarFlow
         self.mComposition = mComposition
+        #self.mComposition = {}
         self.Enthalpy = Enthalpy
 
     def setT(self, T):
@@ -22,7 +23,10 @@ class Stream():
         if key != None:
             self.mComposition[key] = mC
         else:
-            self.mComposition = mC
+            if mC == None:
+                self.mComposition = {}
+            else:
+                self.mComposition = mC
 
     def setH(self, H):
         self.Enthalpy = H
