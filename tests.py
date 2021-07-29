@@ -12,23 +12,23 @@ def Antoine(T, A, B, C):
 def AntoineInv(P, A, B, C):
 
     T = ((B / (A - np.log10(P/0.133322))) - C) + 273.15
-    return round(T, 2) # K
+    return T # K
 
 def HeatVap(T, Tc, C1, C2, C3, C4):
 
     Tr = T / Tc
     Hvap = C1 * (1 - Tr) ** (C2 + C3 * Tr + C4 * Tr * Tr)
-    return round(Hvap/1e6, 2) # kJ / mol
+    return Hvap/1e6 # kJ / mol
 
 def CP_L(T, C1, C2, C3, C4, C5):
 
     CPL = C1 +( C2 * T) +( C3 * (T ** 2)) +( C4 * (T ** 3)) + (C5 * (T ** 4))
-    return round(CPL/1e6, 2) # kJ / mol K
+    return CPL/1e6 # kJ / mol K
 
 def CP_ig(T, C1, C2, C3, C4, C5):
 
     CPIG = C1 + C2 * pow((C3 / T) / (sinh(C3 / T)), 2) + C4 * pow((C5 / T) / (cosh(C5 / T)), 2)
-    return round(CPIG/1e6, 2) # kJ / mol K
+    return CPIG/1e6 # kJ / mol K
 
 def meanCP(f, T1, T2, ar):
 
@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
 
 
-    Tf = 363.15
+    Tf = 400
     Pf = 400
     feedStream = Stream('Feed', Tf, Pf, 100, z)
 
@@ -64,5 +64,6 @@ if __name__ == '__main__':
     T = 393.15
     P = 200
 
-    flash.isothermal(T,P,f,fp, True)
-    flash.Streams()
+    #flash.isothermal(T,P,f,fp, True)
+    flash.adiabatic(P,f,fp)
+    #flash.Streams()

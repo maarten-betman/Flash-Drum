@@ -17,6 +17,7 @@ class FlashDrum():
         self.vapor = Stream("VAPOR")
         self.liquid = Stream("LIQUID")
         self.mode = mode
+        self.psi = 0
         self.heat = None
         self.pressure = None
         self.Tref = 298.15
@@ -72,10 +73,11 @@ class FlashDrum():
         self.vapor.setP(P)
         self.liquid.setT(T)
         self.liquid.setP(P)
-
-
         self.vapor.setmC(None)
         self.liquid.setmC(None)
+
+        T_bubble = self.bubbleT(P, f, fp)
+        T_dew = self.dewT(P, f, fp)
 
 
 
@@ -87,16 +89,25 @@ class FlashDrum():
             Ki[key] = self.idealK(T,P, f['Antoine'], fp['Antoine'][key])
             Tsat[key] = f['AntoineInv'](P,**fp['AntoineInv'][key])
 
-        m = GEKKO()
-        Psi = m.Var(value=0.5, lb= 0.0, ub = 1.0)
-        x = sum([((self.feed.getmC(key) * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
-        m.Equation([x == 0])
-        m.solve(disp=False)  
-        self.vapor.setmF( round(Psi.value[0] * self.feed.getmF(), 3)) 
+        if T <= T_bubble:
+            self.psi = 0
+        elif T >= T_dew:
+            self.psi = 1
+        else:
+        
+            m = GEKKO()
+            m.options.MAX_ITER = 500
+            Psi = m.Var(value=0.5, lb= 0.0, ub = 1.0)
+            x = sum([((self.feed.getmC(key) * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
+            m.Equation([x == 0])
+            m.solve(disp=False) 
+            self.psi = Psi.value[0] 
+
+        self.vapor.setmF( round(self.psi * self.feed.getmF(), 3)) 
         self.liquid.setmF(round(self.feed.getmF() - self.vapor.getmF(), 3))
 
         for key in Ki.keys():
-            self.liquid.setmC((self.feed.getmC(key)) / (1 + Psi.value[0] * (Ki[key] - 1)), key)
+            self.liquid.setmC((self.feed.getmC(key)) / (1 + self.psi * (Ki[key] - 1)), key)
             self.vapor.setmC(self.liquid.getmC(key)  * Ki[key], key)
 
             
@@ -105,8 +116,7 @@ class FlashDrum():
             #Energy Balance
             Tf = self.feed.getT()
             Tref = self.Tref
-            T_bubble = self.bubbleT(P, f, fp)
-            T_dew = self.dewT(P, f, fp)
+            
             cpl = {}
             cpig = {}
             hf = {}
@@ -129,8 +139,54 @@ class FlashDrum():
 
             self.heat = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
 
-        
-        
+    def adiabatic(self, P, f, fp):
+        T_bubble = self.bubbleT(P, f, fp)
+        T_dew = self.dewT(P, f, fp)
+        T = (T_bubble + T_dew) * 0.5
+
+        Tf = self.feed.getT()
+        Tref = self.Tref
+        Q = 1e6
+        cpl = {}
+        cpig = {}
+        hf = {}
+        hg = {}
+        hl = {}
+        n = GEKKO()
+        n.options.MAX_ITER = 500
+        T_i = n.Var(value = T, lb = T_bubble * 0.85, ub = T_dew * 1.15)
+        while abs(Q) >= 1e-4:
+            self.isothermal(T, P, f, fp)
+            
+            
+            
+            for key in self.feed.getmC().keys():
+
+                cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
+                cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
+                #if self.feed.getT() < T_dew:
+                hf[key] = self.feed.getmC(key) * cpl[key] * (Tf - Tref)
+                hl[key] = self.liquid.getmC(key) * cpl[key] * (T_i - Tref)
+                hg[key] = self.vapor.getmC(key) * (cpig[key] * (T_i - Tref) + f['Hvap'](T_i, **fp['Hvap'][key]))
+
+            self.feed.setH( sum([value for value in hf.values()])) 
+            self.liquid.setH( sum([value for value in hl.values()]))
+            self.vapor.setH( sum([value for value in hg.values()]))
+
+
+            Q = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
+            print(Q)
+            print(self.psi)
+            n.Equation([Q == 0])
+            n.solve(disp=False) 
+            T = T_i.value[0]
+
+
+            print(Q)
+            print(self.psi)
+            print(T)
+
+    
         
 
 
