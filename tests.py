@@ -54,16 +54,16 @@ if __name__ == '__main__':
     f = {'Antoine': Antoine, 'AntoineInv' : AntoineInv, 'Hvap' : HeatVap, 'CPL': CP_L, 'CPig' : CP_ig, 'meanCP':meanCP}
     fp = {'Antoine': {C1: aB, C2: aT}, 'AntoineInv' : {C1: aB, C2: aT}, 'Hvap' : {C1: vB, C2: vT}, 'CPL': {C1: cplB, C2: cplT}, 'CPig': {C1: cpigB, C2: cpigT}}
 
-
-
     Tf = 420
     Pf = 400
-    feedStream = Stream('Feed', Tf, Pf, 100, z)
-
+    feedStream = Stream('Feed', Tf - 40, Pf, 100, z)
     flash.setFeedStream(feedStream)
     T = 393.15
     P = 200
 
-    #flash.isothermal(T,P,f,fp, True)
-    flash.adiabatic(P,f,fp)
+    flash.isothermal(T, P, f, fp, True)
+    flash.Streams()
+    feedStream = Stream('Feed', Tf, Pf, 100, z)
+    flash.setFeedStream(feedStream)
+    flash.adiabatic(P, f, fp)
     flash.Streams()

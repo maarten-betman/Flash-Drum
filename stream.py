@@ -9,6 +9,9 @@ class Stream():
         self.mComposition = mComposition
         self.Enthalpy = Enthalpy
 
+    def setName(self, name):
+       self.name = name
+
     def setT(self, T):
         self.Temperature = T
 
@@ -29,6 +32,9 @@ class Stream():
 
     def setH(self, H):
         self.Enthalpy = H
+
+    def getName(self):
+        return self.name
 
     def getT(self):
         return self.Temperature
