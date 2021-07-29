@@ -9,8 +9,9 @@ class FlashDrum():
          -> vapor is an outlet object from the class Stream.
          -> liquid is an outlet object from the class Stream.
          -> mode refers to calculations made by the program, default is "Isothermal".
-         -> heat is the heat in kJ/mol that the Flash Drum requires.
-         -> pressure is the Flash Drum operating pressure.
+         -> Heat is the heat in kJ/mol that the Flash Drum requires.
+         -> Temperature is the Flash Drum operating temperature in K.
+         -> Pressure is the Flash Drum operating pressure kPa.
          -> Tref is the reference temperature in K for the energy balance calculations. 
          This class only works with pressure in kPa and temperature in K. '''
         self.feed = Stream("FEED")
@@ -18,8 +19,9 @@ class FlashDrum():
         self.liquid = Stream("LIQUID")
         self.mode = mode
         self.psi = 0
-        self.heat = None
-        self.pressure = None
+        self.Heat = None
+        self.Temperature = None
+        self.Pressure = None
         self.Tref = 298.15
 
 
@@ -40,25 +42,25 @@ class FlashDrum():
         print("-"*90)
         print("Streams:\t\t" + "FEED" + " " * 20 + "VAPOR " + " " * 20 + "LIQUID")
         print("-"*90)
-        print("\t\t\t" + "T_f = " + str(self.feed.getT()) + " K" + 
-              "\t\t" + "T_v = " + str(self.vapor.getT()) + " K" + 
-              "\t\t  " + "T_l = " + str(self.liquid.getT()) + " K")
+        print("\t\t\t" + "T_f = " + str(round(self.feed.getT(), 2)) + " K" + 
+              "\t\t" + "T_v = " + str(round(self.vapor.getT(), 2)) + " K" + 
+              "\t\t  " + "T_l = " + str(round(self.liquid.getT(), 2)) + " K")
         print("\t\t\t" + "P_f = " + str(self.feed.getP()) + " kPa" + 
               "\t\t" + "P_v = " + str(self.vapor.getP()) + " kPa" + 
               "\t\t  " + "P_l = " + str(self.liquid.getP()) + " kPa")
-        print("\t\t\t" + "F = " + str(self.feed.getmF()) + " mol/h" + 
-              "\t\t" + "V = " + str(self.vapor.getmF()) + " mol/h" + 
-              "\t  " + "L = " + str(self.liquid.getmF()) + " mol/h")
+        print("\t\t\t" + "F = " + str(round(self.feed.getmF(), 3)) + " mol/h" + 
+              "\t\t" + "V = " + str(round(self.vapor.getmF(), 3)) + " mol/h" + 
+              "\t  " + "L = " + str(round(self.liquid.getmF(), 3)) + " mol/h")
         for key in self.feed.getmC().keys():
-            print(key + "\t\t\tz = " + str(round(self.feed.getmC(key), 4)) + 
-              "\t\t\t" + "y = " + str(round(self.vapor.getmC(key), 4)) + 
-              "\t\t  " + "x = " + str(round(self.liquid.getmC(key),4)))
+            print(key + "\t\t\tz = " + str(round(self.feed.getmC(key), 3)) + 
+              "\t\t\t" + "y = " + str(round(self.vapor.getmC(key), 3)) + 
+              "\t\t  " + "x = " + str(round(self.liquid.getmC(key),3)))
             
-        print("\t\t\t" + "h_f = " + str(self.feed.getH()) + " kJ/mol" + 
-              "\t" + "h_v = " + str(self.vapor.getH()) + " kJ/mol" + 
-              "\t  " + "h_l = " + str(self.liquid.getH()) + " kJ/mol")
+        print("\t\t\t" + "h_f = " + str(round(self.feed.getH(), 3)) + " kJ/mol" + 
+              "\t" + "h_v = " + str(round(self.vapor.getH(), 3)) + " kJ/mol" + 
+              "\t  " + "h_l = " + str(round(self.liquid.getH(), 3)) + " kJ/mol")
         print("-"*90)
-        print("\t\t\tHEAT: Q = " + str(round(self.heat)) + " kJ/mol")
+        print("\t\t\tHEAT: Q = " + str(round(self.Heat)) + " kJ/mol")
         print("-"*90)
 
 
@@ -137,54 +139,119 @@ class FlashDrum():
             self.vapor.setH(round( sum([value for value in hg.values()]), 2))
 
 
-            self.heat = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
+            self.Heat = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
 
     def adiabatic(self, P, f, fp):
+
+        self.Pressure = P
+        self.vapor.setP(P)
+        self.liquid.setP(P)
+        self.vapor.setmC(None)
+        self.liquid.setmC(None)
+
         T_bubble = self.bubbleT(P, f, fp)
         T_dew = self.dewT(P, f, fp)
-        T = (T_bubble + T_dew) * 0.5
-
         Tf = self.feed.getT()
         Tref = self.Tref
-        Q = 1e6
+        
         cpl = {}
         cpig = {}
         hf = {}
         hg = {}
         hl = {}
-        n = GEKKO()
-        n.options.MAX_ITER = 500
-        T_i = n.Var(value = T, lb = T_bubble * 0.85, ub = T_dew * 1.15)
-        while abs(Q) >= 1e-4:
-            self.isothermal(T, P, f, fp)
+
+        m = GEKKO()
+        m.options.MAX_ITER = 500
+        Psi = m.Var(value=0.5, lb= 0.0, ub = 1.0)
+        T = m.Var(value=(T_bubble + T_dew) * 0.5, lb = T_bubble * 0.85, ub = T_dew * 1.15)
+
+        # K's 
+        Ki = {}
+        Tsat = {}
+        for key in self.feed.getmC().keys():
+
+            Ki[key] = self.idealK(T,P, f['Antoine'], fp['Antoine'][key])
+            Tsat[key] = f['AntoineInv'](P,**fp['AntoineInv'][key])
+
+
+
+        x = sum([((self.feed.getmC(key) * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
+
+
+        self.vapor.setmF( Psi * self.feed.getmF()) 
+        self.liquid.setmF(self.feed.getmF() - self.vapor.getmF())
+
+
+        for key in Ki.keys():
+            self.liquid.setmC((self.feed.getmC(key)) / (1 + Psi * (Ki[key] - 1)), key)
+            self.vapor.setmC(self.liquid.getmC(key)  * Ki[key], key)
+
+        #Energy Balance
+
+        
+        for key in self.feed.getmC().keys():
+
+            cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
+            cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
+
+            hf[key] = self.feed.getmC(key) * cpl[key] * (Tf - Tref)
+            hl[key] = self.liquid.getmC(key) * cpl[key] * (T - Tref)
+            hg[key] = self.vapor.getmC(key) * (cpig[key] * (T - Tref) + f['Hvap'](T, **fp['Hvap'][key]))
+
+        self.feed.setH( sum([value for value in hf.values()])) 
+        self.liquid.setH( sum([value for value in hl.values()]))
+        self.vapor.setH( sum([value for value in hg.values()]))
+
+        y = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
+
+        m.Equation([x == 0, y == 0])
+        m.solve(disp=False)
+
+
+        ## Eval
+        self.psi = Psi.value[0]
+        self.Temperature = T.value[0]
+
+        for key in self.feed.getmC().keys():
+
+            Ki[key] = self.idealK(self.Temperature,P, f['Antoine'], fp['Antoine'][key])
+
+
+
+        self.vapor.setmF( self.psi * self.feed.getmF()) 
+        self.liquid.setmF(self.feed.getmF() - self.vapor.getmF())
+
+
+
+        for key in Ki.keys():
+            self.liquid.setmC((self.feed.getmC(key)) / (1 + self.psi * (Ki[key] - 1)), key)
+            self.vapor.setmC(self.liquid.getmC(key)  * Ki[key], key)
+
             
-            
-            
-            for key in self.feed.getmC().keys():
 
-                cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
-                cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
-                #if self.feed.getT() < T_dew:
-                hf[key] = self.feed.getmC(key) * cpl[key] * (Tf - Tref)
-                hl[key] = self.liquid.getmC(key) * cpl[key] * (T_i - Tref)
-                hg[key] = self.vapor.getmC(key) * (cpig[key] * (T_i - Tref) + f['Hvap'](T_i, **fp['Hvap'][key]))
+        #Energy Balance
 
-            self.feed.setH( sum([value for value in hf.values()])) 
-            self.liquid.setH( sum([value for value in hl.values()]))
-            self.vapor.setH( sum([value for value in hg.values()]))
+        
+        for key in self.feed.getmC().keys():
+
+            cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
+            cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
+
+            hf[key] = self.feed.getmC(key) * cpl[key] * (Tf - Tref)
+            hl[key] = self.liquid.getmC(key) * cpl[key] * (self.Temperature - Tref)
+            hg[key] = self.vapor.getmC(key) * (cpig[key] * (self.Temperature - Tref) + f['Hvap'](self.Temperature, **fp['Hvap'][key]))
+
+        self.feed.setH( sum([value for value in hf.values()])) 
+        self.liquid.setH( sum([value for value in hl.values()]))
+        self.vapor.setH( sum([value for value in hg.values()]))
+        Q = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
+
+        self.vapor.setT(self.Temperature)
+        self.liquid.setT(self.Temperature)
+        self.Heat = Q
 
 
-            Q = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
-            print(Q)
-            print(self.psi)
-            n.Equation([Q == 0])
-            n.solve(disp=False) 
-            T = T_i.value[0]
 
-
-            print(Q)
-            print(self.psi)
-            print(T)
 
     
         

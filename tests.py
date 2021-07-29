@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
 
 
-    Tf = 400
+    Tf = 420
     Pf = 400
     feedStream = Stream('Feed', Tf, Pf, 100, z)
 
@@ -66,4 +66,4 @@ if __name__ == '__main__':
 
     #flash.isothermal(T,P,f,fp, True)
     flash.adiabatic(P,f,fp)
-    #flash.Streams()
+    flash.Streams()
