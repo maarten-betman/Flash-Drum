@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from stream import Stream
 
+
+
 class FlashDrum():
 
     def __init__(self, mode = 'Isothermal'):
@@ -114,12 +116,14 @@ class FlashDrum():
         self.liquid.setmC(None)
         T_bubble = self.bubbleT(P, f, fp)
         T_dew = self.dewT(P, f, fp)
+        m = GEKKO()
         # K's 
         Ki = {}
         # Ki calculations are made.
         for key in self.feed.getmC().keys():
+            K = m.Intermediate(self.idealK(T,P, f['Antoine'], fp['Antoine'][key]))
+            Ki[key] = K
 
-            Ki[key] = self.idealK(T,P, f['Antoine'], fp['Antoine'][key])
 
         # Check if the operating temperature is between the limits for the PSI calculations.
         if T <= T_bubble:
@@ -132,19 +136,22 @@ class FlashDrum():
 
         else:
             # If the operating temperature is inside the limits calculations for PSI are made.
-            m = GEKKO()
+            
             Psi = m.Var(value=0.5, lb= 0.0, ub = 1.0)
             x = sum([((self.feed.getmC(key) * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
             m.Equation([x == 0])
             m.solve(disp=False) 
-            self.psi = Psi.value[0] 
+            self.psi = float(Psi.value[0]) 
+
         # Calulate vapor and liquid molar flows.
         self.vapor.setmF(self.psi * self.feed.getmF()) 
         self.liquid.setmF(self.feed.getmF() - self.vapor.getmF())
         # Calculate vapor and liquid molar compositions
         for key in Ki.keys():
-            self.liquid.setmC((self.feed.getmC(key)) / (1 + self.psi * (Ki[key] - 1)), key)
-            self.vapor.setmC(self.liquid.getmC(key)  * Ki[key], key)
+            #print(type(key))
+
+            self.liquid.setmC((self.feed.getmC(key)) / (1 + self.psi * (Ki[key][0] - 1)), key)
+            self.vapor.setmC(self.liquid.getmC(key)  * Ki[key][0], key)
         # Check if energy == True for the energy balance calculation         
         if energy:
 
@@ -200,8 +207,9 @@ class FlashDrum():
         Ki = {}
         # Ki calculations are made.
         for key in self.feed.getmC().keys():
+            K = m.Intermediate(self.idealK(T,P, f['Antoine'], fp['Antoine'][key]))
 
-            Ki[key] = self.idealK(T,P, f['Antoine'], fp['Antoine'][key])
+            Ki[key] = K
         # First equation; f(PSI) == 0
         x = sum([((self.feed.getmC(key) * (1 - Ki[key])) / (1 + Psi * (Ki[key] - 1))) for key in Ki.keys()])
         # Intermediate equations:
@@ -230,12 +238,12 @@ class FlashDrum():
         m.Equation([x == 0, y == 0])
         m.solve(disp=False)
         # Evaluate the results of T and PSI in the intermediate equations
-        self.psi = Psi.value[0]
-        self.Temperature = T.value[0]
+        self.psi = float(Psi.value[0])
+        self.Temperature = float(T.value[0])
         # Real Ki calculations are made.
         for key in self.feed.getmC().keys():
 
-            Ki[key] = self.idealK(self.Temperature,P, f['Antoine'], fp['Antoine'][key])
+            Ki[key] = Ki[key][0]
         # Calulate vapor and liquid molar flows.
         self.vapor.setmF( self.psi * self.feed.getmF()) 
         self.liquid.setmF(self.feed.getmF() - self.vapor.getmF())
@@ -267,13 +275,8 @@ class FlashDrum():
     def bubbleT(self, P, f, fp):
         ''' Bubble temperature calculation given an operating pressure.'''
         m = GEKKO()
-        t = 0
-        for key in self.feed.getmC().keys():
 
-            t += f['AntoineInv'](P,**fp['AntoineInv'][key])
-        
-        t = round(t / len(self.feed.getmC()))
-        T = m.Var(value = t, lb = 0.0, ub = 2000.0)
+        T = m.Var(value = 298.15, lb = 0.0, ub = 2000.0)
         # K's 
         Ki = {}
 
@@ -290,13 +293,8 @@ class FlashDrum():
     def dewT(self, P, f, fp ):
         ''' Dew temperature calculation given an operating pressure.'''
         m = GEKKO()
-        t = 0
-        for key in self.feed.getmC().keys():
 
-            t += f['AntoineInv'](P,**fp['AntoineInv'][key])
-        
-        t = round(t / len(self.feed.getmC()))
-        T = m.Var(value = t, lb = 200.0, ub = 800.0)
+        T = m.Var(value = 298.15, lb = 200.0, ub = 800.0)
         # K's 
         Ki = {}
 
