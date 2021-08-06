@@ -2,6 +2,75 @@ from gekko import GEKKO
 import numpy as np
 import matplotlib.pyplot as plt
 from stream import Stream
+from math import sinh, cosh
+from scipy.integrate import quad
+import csv
+
+m = GEKKO()
+
+def Antoine(T, C1, C2, C3, C4, C5):
+
+    
+    P = m.exp(C1 + (C2 / T) + (C3 * m.log(T)) + (C4 * (T ** C5)))
+
+    return (P / 1000) # kPa
+
+def Antoinenp(T, C1, C2, C3, C4, C5):
+
+    
+    P = np.exp(C1 + (C2 / T) + (C3 * np.log(T)) + (C4 * (T ** C5)))
+
+    return (P / 1000) # kPa
+
+def AntoineInv(P, C1, C2, C3, C4, C5):
+
+    T = m.Var(value = 298.15, lb = 200, ub = 800)
+    m.Equation([(m.exp(C1 + (C2 / T) + (C3 * m.log(T)) + (C4 * (T ** C5))) / 1000) - P == 0])
+    m.solve(disp=False)
+    return float(T.value[0]) # K
+
+def HeatVap(T, Tc, C1, C2, C3, C4):
+
+    Tr = T / Tc
+    Hvap = C1 * (1 - Tr) ** (C2 + C3 * Tr + C4 * Tr * Tr)
+    return Hvap/1e6 # kJ / mol
+
+def CP_L(T, C1, C2, C3, C4, C5):
+
+    CPL = C1 +( C2 * T) +( C3 * (T ** 2)) +( C4 * (T ** 3)) + (C5 * (T ** 4))
+    return CPL/1e6 # kJ / mol K
+
+def CP_ig(T, C1, C2, C3, C4, C5):
+
+    CPIG = C1 + C2 * pow((C3 / T) / (sinh(C3 / T)), 2) + C4 * pow((C5 / T) / (cosh(C5 / T)), 2)
+    return CPIG/1e6 # kJ / mol K
+
+def meanCP(f, T1, T2, ar):
+
+    mcp, err = quad(f, T1, T2, args = ar, limit=1100)
+    mcp = mcp / (T2 - T1)
+    return mcp # kJ / mol K
+
+def parameters(compounds):
+
+    p = {'Antoine': {compound: compound_data[compound]['Antoine'] for compound in compounds},
+         'AntoineInv' : {compound: compound_data[compound]['Antoine'] for compound in compounds}, 
+         'Hvap' : {compound: compound_data[compound]['Hvap'] for compound in compounds},
+         'CPL': {compound: compound_data[compound]['CPL'] for compound in compounds},
+         'CPig': {compound: compound_data[compound]['CPIG'] for compound in compounds}}
+
+    return p
+
+
+with open('compound_data.csv', mode = 'r') as csv_f:
+    reader = csv.reader(csv_f)
+    compound_data = {row[0]: {'Antoine': {'C1': float(row[7]), 'C2': float(row[8]), 'C3': float(row[9]), 'C4': float(row[10]), 'C5': float(row[11])},
+                                'Hvap': {'Tc': float(row[1]), 'C1': float(row[12]), 'C2': float(row[13]), 'C3': float(row[14]), 'C4': float(row[15])},
+                                'CPL': {'C1': float(row[2]), 'C2': float(row[3]), 'C3': float(row[4]), 'C4': float(row[5]), 'C5': float(row[6])},
+                                'CPIG': {'C1': float(row[16]), 'C2': float(row[17]), 'C3': float(row[18]), 'C4': float(row[19]), 'C5': float(row[20])}} for row in reader}
+    csv_f.close()
+
+
 
 
 
@@ -99,13 +168,13 @@ class FlashDrum():
         return  results
 
 
-    def idealK(self, T, P, f, fp):
+    def idealK(self, T, P, c):
         ''' Caculates an ideal K parameter with Raoult's Law'''
-        Psat = f(T, **fp)
+        Psat = Antoine(T, **c)
         return Psat / P
 
 
-    def isothermal(self, T, P, f, fp, energy = False):
+    def isothermal(self, T, P, c, energy = False):
         ''' It makes isothermal flash caculations given an operating temperature and pressure.'''
         self.mode = "Isothermal"
         self.vapor.setT(T)
@@ -114,14 +183,14 @@ class FlashDrum():
         self.liquid.setP(P)
         self.vapor.setmC(None)
         self.liquid.setmC(None)
-        T_bubble = self.bubbleT(P, f, fp)
-        T_dew = self.dewT(P, f, fp)
+        T_bubble = self.bubbleT(P, c)
+        T_dew = self.dewT(P, c)
         m = GEKKO()
         # K's 
         Ki = {}
         # Ki calculations are made.
         for key in self.feed.getmC().keys():
-            K = m.Intermediate(self.idealK(T,P, f['Antoine'], fp['Antoine'][key]))
+            K = m.Intermediate(self.idealK(T,P, c['Antoine'][key]))
             Ki[key] = K
 
 
@@ -166,12 +235,12 @@ class FlashDrum():
             
             for key in self.feed.getmC().keys():
                 # Mean heat capacity
-                cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
-                cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
+                cpl[key] = meanCP(CP_L, T_bubble,  T_dew, tuple([value for value in c['CPL'][key].values()]))
+                cpig[key] = meanCP(CP_ig, T_bubble,  T_dew, tuple([value for value in c['CPig'][key].values()]))
                 # Enthalply calculation.
                 hf[key] = self.feed.getmC(key) * cpl[key] * (Tf - Tref)
                 hl[key] = self.liquid.getmC(key) * cpl[key] * (T - Tref)
-                hg[key] = self.vapor.getmC(key) * (cpig[key] * (T - Tref) + f['Hvap'](T, **fp['Hvap'][key]))
+                hg[key] = self.vapor.getmC(key) * (cpig[key] * (T - Tref) + HeatVap(T, **c['Hvap'][key]))
 
             self.feed.setH(sum([value for value in hf.values()])) 
             self.liquid.setH( sum([value for value in hl.values()]))
@@ -181,7 +250,7 @@ class FlashDrum():
             self.Heat = self.vapor.getmF() * self.vapor.getH() + self.liquid.getmF() * self.liquid.getH() - self.feed.getmF() * self.feed.getH()
 
 
-    def adiabatic(self, P, f, fp):
+    def adiabatic(self, P, c):
         ''' It makes adibatic flash caculations given an operating pressure.'''
         self.mode ="Adiabatic"
         self.Pressure = P
@@ -189,8 +258,8 @@ class FlashDrum():
         self.liquid.setP(P)
         self.vapor.setmC(None)
         self.liquid.setmC(None)
-        T_bubble = self.bubbleT(P, f, fp)
-        T_dew = self.dewT(P, f, fp)
+        T_bubble = self.bubbleT(P, c)
+        T_dew = self.dewT(P, c)
         Tf = self.feed.getT()
         Tref = self.Tref        
         cpl = {}
@@ -207,7 +276,7 @@ class FlashDrum():
         Ki = {}
         # Ki calculations are made.
         for key in self.feed.getmC().keys():
-            K = m.Intermediate(self.idealK(T,P, f['Antoine'], fp['Antoine'][key]))
+            K = m.Intermediate(self.idealK(T,P, c['Antoine'][key]))
 
             Ki[key] = K
         # First equation; f(PSI) == 0
@@ -223,11 +292,11 @@ class FlashDrum():
         # Intermediate energy Balance        
         for key in self.feed.getmC().keys():
 
-            cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
-            cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
+            cpl[key] = meanCP(CP_L, T_bubble,  T_dew, tuple([value for value in c['CPL'][key].values()]))
+            cpig[key] = meanCP(CP_ig, T_bubble,  T_dew, tuple([value for value in c['CPig'][key].values()]))
             hf[key] = self.feed.getmC(key) * cpl[key] * (Tf - Tref)
             hl[key] = self.liquid.getmC(key) * cpl[key] * (T - Tref)
-            hg[key] = self.vapor.getmC(key) * (cpig[key] * (T - Tref) + f['Hvap'](T, **fp['Hvap'][key]))
+            hg[key] = self.vapor.getmC(key) * (cpig[key] * (T - Tref) + HeatVap(T, **c['Hvap'][key]))
 
         self.feed.setH( sum([value for value in hf.values()])) 
         self.liquid.setH( sum([value for value in hl.values()]))
@@ -256,12 +325,12 @@ class FlashDrum():
         #Real Energy Balance        
         for key in self.feed.getmC().keys():
             # Mean heat capacity
-            cpl[key] = f['meanCP'](f['CPL'], T_bubble,  T_dew, tuple([value for value in fp['CPL'][key].values()]))
-            cpig[key] = f['meanCP'](f['CPig'], T_bubble,  T_dew, tuple([value for value in fp['CPig'][key].values()]))
+            cpl[key] = meanCP(CP_L, T_bubble,  T_dew, tuple([value for value in c['CPL'][key].values()]))
+            cpig[key] = meanCP(CP_ig, T_bubble,  T_dew, tuple([value for value in c['CPig'][key].values()]))
             # Enthalply calculation.
             hf[key] = self.feed.getmC(key) * cpl[key] * (Tf - Tref)
             hl[key] = self.liquid.getmC(key) * cpl[key] * (self.Temperature - Tref)
-            hg[key] = self.vapor.getmC(key) * (cpig[key] * (self.Temperature - Tref) + f['Hvap'](self.Temperature, **fp['Hvap'][key]))
+            hg[key] = self.vapor.getmC(key) * (cpig[key] * (self.Temperature - Tref) + HeatVap(self.Temperature, **c['Hvap'][key]))
 
         self.feed.setH( sum([value for value in hf.values()])) 
         self.liquid.setH( sum([value for value in hl.values()]))
@@ -272,7 +341,7 @@ class FlashDrum():
         self.Heat = Q
 
 
-    def bubbleT(self, P, f, fp):
+    def bubbleT(self, P, c):
         ''' Bubble temperature calculation given an operating pressure.'''
         m = GEKKO()
 
@@ -281,7 +350,7 @@ class FlashDrum():
         Ki = {}
 
         for key in self.feed.getmC().keys():
-            Ki[key] = self.idealK(T,P, f['Antoine'], fp['Antoine'][key])
+            Ki[key] = self.idealK(T,P, c['Antoine'][key])
         
         x = sum([self.feed.getmC(key) * Ki[key] for key in Ki.keys()])
         m.Equation([x - 1 == 0])
@@ -290,7 +359,7 @@ class FlashDrum():
         return round(T.value[0], 2)
 
 
-    def dewT(self, P, f, fp ):
+    def dewT(self, P, c ):
         ''' Dew temperature calculation given an operating pressure.'''
         m = GEKKO()
 
@@ -299,7 +368,7 @@ class FlashDrum():
         Ki = {}
 
         for key in self.feed.getmC().keys():
-            Ki[key] = self.idealK(T,P, f['Antoine'], fp['Antoine'][key])
+            Ki[key] = self.idealK(T,P, c['Antoine'][key])
 
         x = sum([self.feed.getmC(key) / Ki[key] for key in Ki.keys()])
         m.Equation([x - 1 == 0])
@@ -308,16 +377,16 @@ class FlashDrum():
         return round(T.value[0], 2)
 
 
-    def bubbleP(self, T, f, fp):
+    def bubbleP(self, T, c):
         ''' Bubble pressure calculation given an operating temperature.'''
-        P = sum([self.feed.getmC(key) * f['Antoine'](T, **fp['Antoine'][key]) for key in self.feed.getmC().keys()])
+        P = sum([self.feed.getmC(key) * Antoinenp(T, **c['Antoine'][key]) for key in self.feed.getmC().keys()])
 
         return round(P, 3)
 
 
-    def dewP(self, T, f, fp):
+    def dewP(self, T, c):
         ''' Dew pressure calculation given an operating temperature.'''
-        P = sum([self.feed.getmC(key) / f['Antoine'](T, **fp['Antoine'][key]) for key in self.feed.getmC().keys()]) ** (-1)
+        P = sum([self.feed.getmC(key) / Antoinenp(T, **c['Antoine'][key]) for key in self.feed.getmC().keys()]) ** (-1)
 
         return round(P, 3)
 
