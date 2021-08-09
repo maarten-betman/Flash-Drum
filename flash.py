@@ -1,6 +1,6 @@
 from gekko import GEKKO
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from stream import Stream
 from math import sinh, cosh
 from scipy.integrate import quad
