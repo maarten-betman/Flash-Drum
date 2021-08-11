@@ -381,7 +381,7 @@ class FlashDrum():
         ''' Bubble pressure calculation given an operating temperature.'''
         P = sum([self.feed.getmC(key) * Antoinenp(T, **c['Antoine'][key]) for key in self.feed.getmC().keys()])
 
-        return round(P, 3)
+        return P
 
 
     def dewP(self, T, c):
