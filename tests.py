@@ -6,8 +6,8 @@ from stream import Stream
 
 if __name__ == '__main__':
     flash = FlashDrum()
-    C1 = 'Benzene'
-    C2 = 'Toluene'
+    C1 = 'benzene'
+    C2 = 'toluene'
     z = {C1: 0.5, C2: 0.5}
 
     c = parameters([C1, C2])
@@ -20,8 +20,8 @@ if __name__ == '__main__':
     P = 200
 
     flash.isothermal(T, P, c, True)
-    flash.Streams()
-    feedStream = Stream('Feed', Tf, Pf, 100, z)
-    flash.setFeedStream(feedStream)
-    flash.adiabatic(P, c)
-    flash.Streams()
+    print(flash.Streams(True))
+    # feedStream = Stream('Feed', Tf, Pf, 100, z)
+    # flash.setFeedStream(feedStream)
+    # flash.adiabatic(P, c)
+    # flash.Streams()
