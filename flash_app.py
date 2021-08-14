@@ -40,7 +40,8 @@ with mixture:
    
     for i in components:
         fraction[i] = st.number_input(label=i, key="Component_" + i, min_value=0.0000, max_value=1.0000, step=0.0001, format = "%.4f", value = 0.0)
-    components = fd.parameters([key for key in fraction.keys()])  
+    current_mixture = [key for key in fraction.keys()]
+    components = fd.parameters(current_mixture)  
     nonZero = sum([z for z in fraction.values()])
 ################################################################################
 ################################################################################
@@ -233,83 +234,123 @@ if len(fraction) > 0:
     ################################################################################
     ################################################################################
     ################################################################################
-    with diagrams:
-        st.header("3.- Binary phase diagrams ☁")
+    
+    if len(fraction) > 1:
+        with diagrams:
+            st.header("3.- Binary phase diagrams ☁")
+            flash_d = fd.FlashDrum()
+            components_d = fd.parameters(current_mixture)
+            
 
-        # with st.form(key = "Diagrams"):
-        #     colc1, colc2 = st.columns([1, 1])
-        #     with colc1:
-        #         C1 = st.selectbox(label="Compound 1", options=["benzene", "toluene", "chlorobenzene", "p-xylene",  "styrene"])
+            colD1, colD2 = st.columns([1, 1])
 
-        #         with colc2:
-        #             C2 = st.selectbox(label="Compound 1", options=["benzene", "toluene", "chlorobenzene", "p-xylene",  "styrene"].remove(C1))
+            with colD1:
 
-        # volatility = ["benzene", "toluene", "chlorobenzene", "p-xylene",  "styrene"]
-        # current_mixture = ["benzene", "toluene", "p-xylene"]
-        # diagrams = np.zeros((5,5), dtype=int)
-        # for i in range(len(diagrams)):
-        #     for j in range(len(diagrams)):
-        #         if volatility[i] in current_mixture and volatility[j] in current_mixture:
-        #             diagrams[i, j] = 1
-        # diagrams = np.triu(diagrams, 1)
-        # flash_d = fd.FlashDrum()
-        
-        
+                C1 = st.selectbox(label="Compound 1", options = current_mixture)
 
-        
+            with colD2:
 
+                C2 = st.selectbox(label="Compound 2", options = current_mixture)
 
-
-
-        # if Calculation == "T vs x Diagram":
-        #     st.subheader("3.1- T vs x Diagram")
-
-        #     with st.form(key = "Tvsx"):
-        #         if len(current_mixture) > 1:
-        #             col13, col14 = st.columns([1, 1])
-        #             with col13:
-        #                 C1 = st.selectbox(label="Compound 1", options=current_mixture)
-        #                 if C1:
-        #                     with col14:
-        #                         C2 = st.selectbox(label="Compund 2", options=current_mixture.remove(C1))
-
-        #         else:
-        #             st.error("You need at least two compounds")
-
+            if C1 == C2:
+                st.error("Compound 1 and Compound 2 must be different!")
+            else:
                 
+                Diagram = st.selectbox(label="Phase Diagram", options = ["T vs xy Diagram", "P vs xy Diagram"])
                 
+                with st.form(key = "Diagrams"):
 
-        #         Px = st.number_input(label = "System pressure in kPa", min_value= 10.0, max_value=1100.0, step = 10.0, format="%.2f")
-        #         button7 = st.form_submit_button("Generate diagrams!")
+                    if Diagram == "T vs xy Diagram":
 
-                # if button7:
+                        st.subheader("3.1- T vs xy Diagram")
+                        P_d = st.number_input(label = "System pressure in kPa", min_value= 10.0, max_value=1100.0, step = 10.0, format="%.2f")
+                        n = st.number_input(label = "Number of points", min_value = 3, max_value = 101, step= 1)
+                        x = np.linspace(0.0, 1.0, num = n)
+                        buttonDT = st.form_submit_button("Generate diagrams!")
 
-                #     with st.spinner("Generating diagrams..."):
+                        if buttonDT:
+
+                            with st.spinner("Generating diagrams..."):
+                                
+                                T_b = []
+                                T_d = []
+                                fig = go.Figure()
+                                for xi in x:
+                                    fraction_d = {C1: xi, C2: 1 - xi}
+                                    
+                                    stream_d = Stream(mComposition = fraction_d)
+                                    flash_d.setFeedStream(stream_d)
+                                    T_b.append(flash_d.bubbleT(P_d, components_d))
+                                    T_d.append(flash_d.dewT(P_d, components_d))
+
+                                fig.add_trace(go.Scatter(x = x, y = T_b, mode = "lines+markers", name = "Bubble points", line = {'color': '#3D78FD', 'width': 3.5}, marker = {'color': '#3D78FD', 'symbol': 0, 'size': 10}))
+                                fig.add_trace(go.Scatter(x = x, y = T_d, mode = "lines+markers", name = "Dew points", line = {'color': '#3DFDB2', 'width': 3.5}, marker = {'color': '#3DFDB2', 'symbol': 0, 'size': 10}))
+                                fig.update_layout(xaxis = {'range': [0,1],
+                                                            'linecolor': "#0238B2",
+                                                            'linewidth': 5,
+                                                            'showgrid': False,
+                                                            'title': {'font': {'family': 'Bahnschrift SemiBold Condensed,Impact,Overpass,Droid Sans,Raleway,Arial', 'size': 16},
+                                                            'text': 'x,y {}'.format(C1)},
+                                                            'dtick': 0.1,
+                                                            'tick0': 0.0},
+                                                    yaxis = {  'linecolor': "#0238B2",
+                                                            'linewidth': 5,
+                                                            'showgrid': False,
+                                                            'title': {'font': {'family': 'Bahnschrift SemiBold Condensed,Impact,Overpass,Droid Sans,Raleway,Arial', 'size': 16},
+                                                            'text': 'Temperature (K)'}},
+                                                plot_bgcolor = '#01143D',
+                                                title = {'font': {'family': 'Bahnschrift SemiBold Condensed,Impact,Overpass,Droid Sans,Raleway,Arial', 'size': 25}, 'text' : "Phase equilibrium of {} and {} at {} kPa".format(C1, C2, P_d)},
+                                                )
+                                st.write(fig)
+
+                    elif Diagram == "P vs xy Diagram":
                         
-                        
-                #         x = np.linspace(0.0, 1.0, num = 21)
-                #         for i, x1 in enumerate(volatility):
-                #             for j, x2 in enumerate(volatility):
-                #                 if diagrams[i, j] == 1:
-                #                     T_b = []
-                #                     T_d = []
-                #                     fig = go.Figure()
-                #                     for k in x:
-                #                         fraction_d = {x1: k, x2: 1 - k}
-                #                         components_d = fd.parameters(current_mixture)
-                #                         stream_d = Stream(mComposition = fraction_d)
-                #                         flash_d.setFeedStream(stream_d)
-                #                         T_b.append(flash_d.bubbleT(Px, components_d))
-                #                         T_d.append(flash_d.dewT(Px, components_d))
+                        st.subheader("3.2- P vs xy Diagram")
+                        T_d = st.number_input(label = "System temperature in K", min_value=200.0, max_value=800.0, step=1.0, format = "%.2f")
+                        n = st.number_input(label = "Number of points", min_value = 3, max_value = 101, step= 1)
+                        x = np.linspace(0.0, 1.0, num = n)
+                        buttonDT = st.form_submit_button("Generate diagrams!")
 
-                #                     fig.add_trace(go.Scatter(x = x, y = T_b, mode = "lines", name = "x_"  + x1, line = {'color': '#3D78FD'}))
-                #                     fig.add_trace(go.Scatter(x = x, y = T_d, mode = "lines", name = "x_"  + x1, line = {'color': '#3DFDB2'}))
-                #         st.write(fig)
+                        if buttonDT:
 
-    ################################################################################
-    ################################################################################
-    ################################################################################
-    ################################################################################
+                            with st.spinner("Generating diagrams..."):
+                                
+                                P_b = []
+                                P_d = []
+                                fig = go.Figure()
+                                for xi in x:
+                                    fraction_d = {C1: xi, C2: 1 - xi}
+                                    
+                                    stream_d = Stream(mComposition = fraction_d)
+                                    flash_d.setFeedStream(stream_d)
+                                    P_b.append(flash_d.bubbleP(T_d, components_d))
+                                    P_d.append(flash_d.dewP(T_d, components_d))
+
+                                fig.add_trace(go.Scatter(x = x, y = P_b, mode = "lines+markers", name = "Bubble points", line = {'color': '#3D78FD', 'width': 3.5}, marker = {'color': '#3D78FD', 'symbol': 0, 'size': 10}))
+                                fig.add_trace(go.Scatter(x = x, y = P_d, mode = "lines+markers", name = "Dew points", line = {'color': '#3DFDB2', 'width': 3.5}, marker = {'color': '#3DFDB2', 'symbol': 0, 'size': 10}))
+                                fig.update_layout(xaxis = {'range': [0,1],
+                                                            'linecolor': "#0238B2",
+                                                            'linewidth': 5,
+                                                            'showgrid': False,
+                                                            'title': {'font': {'family': 'Bahnschrift SemiBold Condensed,Impact,Overpass,Droid Sans,Raleway,Arial', 'size': 16},
+                                                            'text': 'x,y {}'.format(C1)},
+                                                            'dtick': 0.1,
+                                                            'tick0': 0.0},
+                                                    yaxis = {  'linecolor': "#0238B2",
+                                                            'linewidth': 5,
+                                                            'showgrid': False,
+                                                            'title': {'font': {'family': 'Bahnschrift SemiBold Condensed,Impact,Overpass,Droid Sans,Raleway,Arial', 'size': 16},
+                                                            'text': 'Pressure (kPa)'}},
+                                                plot_bgcolor = '#01143D',
+                                                title = {'font': {'family': 'Bahnschrift SemiBold Condensed,Impact,Overpass,Droid Sans,Raleway,Arial', 'size': 25}, 'text' : "Phase equilibrium of {} and {} at {} K".format(C1, C2, T_d)},
+                                                )
+                                st.write(fig)
+                    
+
+        ###############################################################################
+        ################################################################################
+        ################################################################################
+        ################################################################################
 
 
 with footer:

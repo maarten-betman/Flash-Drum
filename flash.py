@@ -24,7 +24,7 @@ def Antoinenp(T, C1, C2, C3, C4, C5):
 
 def AntoineInv(P, C1, C2, C3, C4, C5):
 
-    T = m.Var(value = 298.15, lb = 200, ub = 800)
+    T = m.Var(value = 298.15, lb = 100, ub = 800)
     m.Equation([(m.exp(C1 + (C2 / T) + (C3 * m.log(T)) + (C4 * (T ** C5))) / 1000) - P == 0])
     m.solve(disp=False)
     return float(T.value[0]) # K
@@ -371,7 +371,7 @@ class FlashDrum():
         ''' Bubble temperature calculation given an operating pressure.'''
         m = GEKKO()
 
-        T = m.Var(value = 298.15, lb = 0.0, ub = 2000.0)
+        T = m.Var(value = 298.15, lb = 0.0, ub = 800.0)
         # K's 
         Ki = {}
 
